@@ -21,6 +21,8 @@
 #define BUZZER_PIN 21 //Pino do buzzer
 #define BOTAO_A 5       //Pino do botão A
 #define IS_RGBW false //Maquina PIO para RGBW
+#define LUX_MIN 100      // Limite de luminosidade em lux
+#define RED_ALERT 200    // Limite para vermelho intenso
 
 //Definições do sensor GY-33
 #define GY33_I2C_ADDR 0x29 //Endereço do GY-33 no barramento I2C
@@ -38,6 +40,12 @@ uint buzzer_slice;                   //Slice para o buzzer
 ssd1306_t ssd;
 volatile uint8_t tela_atual = 0;        //0 = GY-33, 1 = BH1750, etc
 volatile uint32_t last_press_time = 0;  //Para debounce
+
+void buzzer_beep(uint slice, int duracao_ms){
+    pwm_set_enabled(slice, true);   // Liga o buzzer
+    sleep_ms(duracao_ms);
+    pwm_set_enabled(slice, false);  // Desliga
+}
 
 void inicializar_componentes(){
     stdio_init_all();
@@ -141,9 +149,18 @@ int main(){
 
         sprintf(str_lux, "%d Lux", lux);  // Converte o inteiro em string
 
+        //Alerta com buzzer de pouca luz
+        if(lux < LUX_MIN){
+            buzzer_beep(buzzer_slice, 100);   // beep curto
+        }
+        //Alerta com buzzer de vermelho intenso
+        if(r > RED_ALERT && r > g * 2 && r > b * 2){
+            buzzer_beep(buzzer_slice, 500);   //beep longo
+        }
+
+        ssd1306_fill(&ssd, false);                          // Limpa o display
         if(tela_atual == 0){    //Tela 0 - Sensor de cor GY33
         //Atualiza o conteúdo do display com animações
-        ssd1306_fill(&ssd, false);                          // Limpa o display
         ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);      // Desenha um retângulo
         ssd1306_line(&ssd, 3, 25, 123, 25, true);           // Desenha uma linha
         ssd1306_line(&ssd, 3, 37, 123, 37, true);           // Desenha uma linha
@@ -158,7 +175,6 @@ int main(){
         }
         if(tela_atual == 1){    //Tela 1 - Sensor de luz GY302
         //Atualiza o conteúdo do display com animações
-        ssd1306_fill(&ssd, false);                           // Limpa o display
         ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);       // Desenha um retângulo
         ssd1306_line(&ssd, 3, 25, 123, 25, true);            // Desenha uma linha
         ssd1306_line(&ssd, 3, 37, 123, 37, true);            // Desenha uma linha
