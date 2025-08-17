@@ -19,6 +19,7 @@
 #define LED_BLUE 11
 #define WS2812_PIN 7  //Pino do WS2812
 #define BUZZER_PIN 21 //Pino do buzzer
+#define BOTAO_A 5       //Pino do botão A
 #define IS_RGBW false //Maquina PIO para RGBW
 
 //Definições do sensor GY-33
@@ -35,6 +36,8 @@
 //Variáveis globais
 uint buzzer_slice;                   //Slice para o buzzer
 ssd1306_t ssd;
+volatile uint8_t tela_atual = 0;        //0 = GY-33, 1 = BH1750, etc
+volatile uint32_t last_press_time = 0;  //Para debounce
 
 void inicializar_componentes(){
     stdio_init_all();
@@ -51,6 +54,13 @@ void inicializar_componentes(){
     gpio_init(LED_BLUE);
     gpio_set_dir(LED_BLUE, GPIO_OUT);
     gpio_put(LED_BLUE, 0);
+
+    //Inicializa o botão A com pull-up
+    gpio_init(BOTAO_A);
+    gpio_set_dir(BOTAO_A, GPIO_IN);
+    gpio_pull_up(BOTAO_A);
+    //Interrupção no botão A
+    gpio_set_irq_enabled_with_callback(BOTAO_A, GPIO_IRQ_EDGE_FALL, true, &botao_a_callback);
 
     //Inicializa o pio
     PIO pio = pio0;
@@ -94,6 +104,17 @@ void inicializar_componentes(){
     bh1750_power_on(I2C_PORT);
 }
 
+void botao_a_callback(uint gpio, uint32_t events){
+    uint32_t agora = to_ms_since_boot(get_absolute_time());
+    if(agora - last_press_time > 250){   // debounce de 250ms
+        last_press_time = agora;
+        tela_atual++;
+        if(tela_atual > 1){ //verifica e alterna a tela
+            tela_atual = 0;
+        }
+    }
+}
+
 int main(){
     inicializar_componentes();
 
@@ -101,7 +122,6 @@ int main(){
     char str_green[5]; 
     char str_blue[5];  
     char str_clear[5]; 
-
     char str_lux[10];  //Buffer para armazenar a string do sensor de luz
 
     while(true){
@@ -121,7 +141,7 @@ int main(){
 
         sprintf(str_lux, "%d Lux", lux);  // Converte o inteiro em string
 
-        if(1){
+        if(tela_atual == 0){    //Tela 0 - Sensor de cor GY33
         //Atualiza o conteúdo do display com animações
         ssd1306_fill(&ssd, false);                          // Limpa o display
         ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);      // Desenha um retângulo
@@ -135,9 +155,8 @@ int main(){
         ssd1306_draw_string(&ssd, str_green, 14, 52);      // Desenha uma string
         ssd1306_draw_string(&ssd, str_blue, 73, 41);       // Desenha uma string
         ssd1306_draw_string(&ssd, str_clear, 73, 52);      // Desenha uma string
-        ssd1306_send_data(&ssd);                           // Atualiza o display
         }
-        if(2){
+        if(tela_atual == 1){    //Tela 1 - Sensor de luz GY302
         //Atualiza o conteúdo do display com animações
         ssd1306_fill(&ssd, false);                           // Limpa o display
         ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);       // Desenha um retângulo
@@ -148,8 +167,9 @@ int main(){
         ssd1306_draw_string(&ssd, "Sensor  BH1750", 10, 28);// Desenha uma string
         ssd1306_line(&ssd, 63, 25, 63, 37, true);            // Desenha uma linha vertical
         ssd1306_draw_string(&ssd, str_lux, 14, 41);         // Desenha uma string
-        ssd1306_send_data(&ssd);                            // Atualiza o display
         }
+
+        ssd1306_send_data(&ssd);                           //Atualiza o display
         sleep_ms(500);
     }
 }
