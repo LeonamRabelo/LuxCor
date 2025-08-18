@@ -11,17 +11,16 @@
 #include "lib/ssd1306.h"
 #include "lib/font.h"
 #include "lib/matriz_leds.h"
+#include "lib/led_rgb.h"
 #include "gy33.h"
 #include <string.h>
 
 #define I2C_SDA_DISPLAY 14    //Pino SDA - Dados para display SSD1306
 #define I2C_SCL_DISPLAY 15    //Pino SCL - Clock para display SSD1306
-#define LED_RED 13
-#define LED_GREEN 12
-#define LED_BLUE 11
 #define WS2812_PIN 7  //Pino do WS2812
 #define BUZZER_PIN 21 //Pino do buzzer
 #define BOTAO_A 5       //Pino do botão A
+#define BOTAO_B 6       //Pino do botão B
 #define IS_RGBW false //Maquina PIO para RGBW
 #define LUX_MIN 100      // Limite de luminosidade em lux
 #define RED_ALERT 200    // Limite para vermelho intenso
@@ -37,55 +36,14 @@
 #define I2C_SDA_LUX 2                   // 0 ou 2
 #define I2C_SCL_LUX 3                   // 1 ou 3
 
+enum colors {RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA, WHITE, BLACK};
+
 //Variáveis globais
 uint buzzer_slice;                   //Slice para o buzzer
 ssd1306_t ssd;
 volatile uint8_t tela_atual = 0;        //0 = GY-33, 1 = BH1750, etc
 volatile uint32_t last_press_time = 0;  //Para debounce
-
-// Função para atualizar a matriz de LEDs conforme sensores
-void update_led_matrix_by_sensors(uint16_t r, uint16_t g, uint16_t b, uint16_t lux) {
-    // Normaliza os valores RGB para 0-255
-    uint16_t max_rgb = r;
-    if (g > max_rgb) max_rgb = g;
-    if (b > max_rgb) max_rgb = b;
-    uint8_t R = max_rgb ? (r * 255) / max_rgb : 0;
-    uint8_t G = max_rgb ? (g * 255) / max_rgb : 0;
-    uint8_t B = max_rgb ? (b * 255) / max_rgb : 0;
-
-    // Ajusta brilho conforme lux (0 = escuro, 255 = máximo)
-    uint8_t brightness = lux > 1000 ? 255 : (lux * 255) / 1000;
-    R = (R * brightness) / 255;
-    G = (G * brightness) / 255;
-    B = (B * brightness) / 255;
-
-    // Atualiza todos os LEDs da matriz (todos acesos)
-    set_one_led(R, G, B, 0);
-}
-
-// Função para identificar o nome da cor a partir de valores RGB
-const char* get_color_name(uint16_t r, uint16_t g, uint16_t b) {
-    // Normaliza para 0-255
-    uint16_t max_rgb = r;
-    if (g > max_rgb) max_rgb = g;
-    if (b > max_rgb) max_rgb = b;
-    uint8_t R = max_rgb ? (r * 255) / max_rgb : 0;
-    uint8_t G = max_rgb ? (g * 255) / max_rgb : 0;
-    uint8_t B = max_rgb ? (b * 255) / max_rgb : 0;
-
-    // Limiares simples para cores básicas
-    if (R > 200 && G < 80 && B < 80) return "Red";
-    if (R < 80 && G > 200 && B < 80) return "Green";
-    if (R < 80 && G < 80 && B > 200) return "Blue";
-    if (R > 200 && G > 200 && B < 80) return "Yellow";
-    if (R < 80 && G > 200 && B > 200) return "Cyan";
-    if (R > 200 && G < 80 && B > 200) return "Magenta";
-    if (R > 200 && G > 200 && B > 200) return "White";
-    if (R < 50 && G < 50 && B < 50) return "Black";
-    if (R > 150 && G > 80 && B < 80) return "Orange";
-    if (R > 180 && G > 180 && B > 100 && B < 180) return "Gray";
-    return "Unknown";
-}
+volatile int cor_atual = RED;  //Cor atual da matriz de LED
 
 // Função para classificar a luminosidade
 const char* get_lux_level(uint16_t lux) {
@@ -111,28 +69,72 @@ void botao_a_callback(uint gpio, uint32_t events){
     }
 }
 
+void botao_b_callback(uint gpio, uint32_t events){
+    uint32_t agora = to_ms_since_boot(get_absolute_time());
+    if(agora - last_press_time > 250){   // debounce de 250ms
+        last_press_time = agora;
+        switch (cor_atual)
+        {
+        case RED:
+            red();
+            break;
+        case GREEN:
+            green();
+            break;
+        case BLUE:
+            blue();
+            break;
+        case YELLOW:
+            yellow();
+            break;
+        case CYAN:
+            cyan();
+            break;
+        case MAGENTA:
+            magenta();
+            break;
+        case WHITE:
+            white();
+            break;
+        case BLACK:
+            black();
+            break;
+        default:
+            cor_atual = RED;
+            red();
+            break;
+        }
+    }
+}
+
+void gpio_irq_callback(uint gpio, uint32_t events){
+    if(gpio == BOTAO_A){
+        botao_a_callback(gpio, events);
+    } else if(gpio == BOTAO_B){
+        botao_b_callback(gpio, events);
+    }
+}
+
 void inicializar_componentes(){
     stdio_init_all();
 
-    //Inicializa LED Vermelho
-    gpio_init(LED_RED);
-    gpio_set_dir(LED_RED, GPIO_OUT);
-    gpio_put(LED_RED, 0);
-    //Inicializa LED Verde
-    gpio_init(LED_GREEN);
-    gpio_set_dir(LED_GREEN, GPIO_OUT);
-    gpio_put(LED_GREEN, 0);
-    //Inicializa LED Azul
-    gpio_init(LED_BLUE);
-    gpio_set_dir(LED_BLUE, GPIO_OUT);
-    gpio_put(LED_BLUE, 0);
+    //Inicializa os LEDs RGB
+    led_init_all();
 
     //Inicializa o botão A com pull-up
     gpio_init(BOTAO_A);
     gpio_set_dir(BOTAO_A, GPIO_IN);
     gpio_pull_up(BOTAO_A);
+
+    //Inicializa o botão B com pull-up
+    gpio_init(BOTAO_B);
+    gpio_set_dir(BOTAO_B, GPIO_IN);
+    gpio_pull_up(BOTAO_B);
+
     //Interrupção no botão A
-    gpio_set_irq_enabled_with_callback(BOTAO_A, GPIO_IRQ_EDGE_FALL, true, &botao_a_callback);
+    gpio_set_irq_enabled_with_callback(BOTAO_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_callback);
+    //Interrupção no botão B
+    gpio_set_irq_enabled_with_callback(BOTAO_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_callback);
 
     //Inicializa o pio
     PIO pio = pio0;

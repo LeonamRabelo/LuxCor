@@ -51,3 +51,47 @@ void set_one_led(uint8_t r, uint8_t g, uint8_t b, int numero){
         }
     }
 }
+
+// Função para atualizar a matriz de LEDs conforme sensores
+void update_led_matrix_by_sensors(uint16_t r, uint16_t g, uint16_t b, uint16_t lux) {
+    // Normaliza os valores RGB para 0-255
+    uint16_t max_rgb = r;
+    if (g > max_rgb) max_rgb = g;
+    if (b > max_rgb) max_rgb = b;
+    uint8_t R = max_rgb ? (r * 255) / max_rgb : 0;
+    uint8_t G = max_rgb ? (g * 255) / max_rgb : 0;
+    uint8_t B = max_rgb ? (b * 255) / max_rgb : 0;
+
+    // Ajusta brilho conforme lux (0 = escuro, 255 = máximo)
+    uint8_t brightness = lux > 1000 ? 255 : (lux * 255) / 1000;
+    R = (R * brightness) / 255;
+    G = (G * brightness) / 255;
+    B = (B * brightness) / 255;
+
+    // Atualiza todos os LEDs da matriz (todos acesos)
+    set_one_led(R, G, B, 0);
+}
+
+// Função para identificar o nome da cor a partir de valores RGB
+const char* get_color_name(uint16_t r, uint16_t g, uint16_t b) {
+    // Normaliza para 0-255
+    uint16_t max_rgb = r;
+    if (g > max_rgb) max_rgb = g;
+    if (b > max_rgb) max_rgb = b;
+    uint8_t R = max_rgb ? (r * 255) / max_rgb : 0;
+    uint8_t G = max_rgb ? (g * 255) / max_rgb : 0;
+    uint8_t B = max_rgb ? (b * 255) / max_rgb : 0;
+
+    // Limiares simples para cores básicas
+    if (R > 200 && G < 80 && B < 80) return "Red";
+    if (R < 80 && G > 200 && B < 80) return "Green";
+    if (R < 80 && G < 80 && B > 200) return "Blue";
+    if (R > 200 && G > 200 && B < 80) return "Yellow";
+    if (R < 80 && G > 200 && B > 200) return "Cyan";
+    if (R > 200 && G < 80 && B > 200) return "Magenta";
+    if (R > 200 && G > 200 && B > 200) return "White";
+    if (R < 50 && G < 50 && B < 50) return "Black";
+    if (R > 150 && G > 80 && B < 80) return "Orange";
+    if (R > 180 && G > 180 && B > 100 && B < 180) return "Gray";
+    return "Unknown";
+}

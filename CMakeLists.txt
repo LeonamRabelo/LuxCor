@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(LuxCor LuxCor.c lib/bh1750_light_sensor.c lib/gy33.c lib/ssd1306.c lib/matriz_leds.c)
+add_executable(LuxCor LuxCor.c lib/bh1750_light_sensor.c lib/gy33.c lib/ssd1306.c lib/matriz_leds.c lib/led_rgb.c)
 
 pico_set_program_name(LuxCor "LuxCor")
 pico_set_program_version(LuxCor "0.1")

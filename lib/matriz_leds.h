@@ -8,5 +8,7 @@
 
 //Função pública
 void set_one_led(uint8_t r, uint8_t g, uint8_t b, int numero);
+void update_led_matrix_by_sensors(uint16_t r, uint16_t g, uint16_t b, uint16_t lux);
+const char* get_color_name(uint16_t r, uint16_t g, uint16_t b);
 
 #endif
