@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "pico/bootrom.h"
 #include "hardware/i2c.h"
 #include "hardware/pio.h"
 #include "hardware/pwm.h"
@@ -21,6 +22,7 @@
 #define BUZZER_PIN 21 //Pino do buzzer
 #define BOTAO_A 5       //Pino do botão A
 #define BOTAO_B 6       //Pino do botão B
+#define BOTAO_JOYSTICK 22 //Pino do botão joystick
 #define IS_RGBW false //Maquina PIO para RGBW
 #define LUX_MIN 100      // Limite de luminosidade em lux
 #define RED_ALERT 200    // Limite para vermelho intenso
@@ -32,7 +34,7 @@
 #define SCL_PIN 1
 
 //Para o sensor de luz BH1750. Endereço 0x23
-#define I2C_PORT_LUX i2c1               // i2c0 pinos 0 e 1, i2c1 pinos 2 e 3
+#define I2C_PORT_LUX i2c0               // i2c0 pinos 0 e 1, i2c1 pinos 2 e 3
 #define I2C_SDA_LUX 2                   // 0 ou 2
 #define I2C_SCL_LUX 3                   // 1 ou 3
 
@@ -73,6 +75,7 @@ void botao_b_callback(uint gpio, uint32_t events){
     uint32_t agora = to_ms_since_boot(get_absolute_time());
     if(agora - last_press_time > 250){   // debounce de 250ms
         last_press_time = agora;
+        cor_atual++;
         switch (cor_atual)
         {
         case RED:
@@ -107,11 +110,24 @@ void botao_b_callback(uint gpio, uint32_t events){
     }
 }
 
+void botao_joystick_callback(uint gpio, uint32_t events){
+    uint32_t agora = to_ms_since_boot(get_absolute_time());
+    if(agora - last_press_time > 250){   // debounce de 250ms
+        last_press_time = agora;
+        //Desliga os leds da matriz
+        set_one_led(0, 0, 0, 0);
+        black();
+        reset_usb_boot(0, 0);
+    }
+}
+
 void gpio_irq_callback(uint gpio, uint32_t events){
     if(gpio == BOTAO_A){
         botao_a_callback(gpio, events);
     } else if(gpio == BOTAO_B){
         botao_b_callback(gpio, events);
+    } else if(gpio == BOTAO_JOYSTICK){
+        botao_joystick_callback(gpio, events);
     }
 }
 
@@ -120,6 +136,7 @@ void inicializar_componentes(){
 
     //Inicializa os LEDs RGB
     led_init_all();
+    red();
 
     //Inicializa o botão A com pull-up
     gpio_init(BOTAO_A);
@@ -131,10 +148,17 @@ void inicializar_componentes(){
     gpio_set_dir(BOTAO_B, GPIO_IN);
     gpio_pull_up(BOTAO_B);
 
+    //Inicializa o botão joystick com pull-up
+    gpio_init(BOTAO_JOYSTICK);
+    gpio_set_dir(BOTAO_JOYSTICK, GPIO_IN);
+    gpio_pull_up(BOTAO_JOYSTICK);
+
     //Interrupção no botão A
     gpio_set_irq_enabled_with_callback(BOTAO_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_callback);
     //Interrupção no botão B
     gpio_set_irq_enabled_with_callback(BOTAO_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_callback);
+    //Interrupção no botão joystick
+    gpio_set_irq_enabled_with_callback(BOTAO_JOYSTICK, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_callback);
 
     //Inicializa o pio
     PIO pio = pio0;
@@ -195,6 +219,10 @@ int main(){
         r = color.r;
         g = color.g;
         b = color.b;
+
+        r = r > 255 ? 255 : r;
+        g = g > 255 ? 255 : g;
+        b = b > 255 ? 255 : b;
 
         //Leitura do sensor de Luz BH1750
         uint16_t lux = bh1750_read_measurement(I2C_PORT_LUX);

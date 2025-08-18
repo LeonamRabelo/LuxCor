@@ -45,7 +45,7 @@ void bh1750_power_on(i2c_inst_t* i2c) {
  */
 uint16_t bh1750_read_measurement(i2c_inst_t* i2c) {
     // Send "Continuously H-resolution mode" instruction
-    _i2c_write_byte(i2c, _CONT_HRES_C);
+    _i2c_write_byte(i2c, _CONT_HRES2_C);
 
     // Wait at least 180 ms to complete measurement
     sleep_ms(200);
@@ -54,7 +54,7 @@ uint16_t bh1750_read_measurement(i2c_inst_t* i2c) {
 
     i2c_read_blocking(i2c, _BH1750_I2C_ADDR, buff, 2, false);
 
-    return (((uint16_t)buff[0] << 8) | buff[1]) / 1.2;
+    return (((uint16_t)buff[0] << 8) | buff[1]) / 2.4;
     // Obs. quando utilizar _CONT_HRES2_C dividir por 2.4
     // Quando utilizar _CONT_HRES_C dividir por 1.2
 }
