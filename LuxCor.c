@@ -59,10 +59,8 @@ void update_led_matrix_by_sensors(uint16_t r, uint16_t g, uint16_t b, uint16_t l
     G = (G * brightness) / 255;
     B = (B * brightness) / 255;
 
-    // Atualiza todos os LEDs da matriz
-    for (int i = 0; i < NUM_PIXELS; i++) {
-        set_one_led(R, G, B, 0); // 0: todos acesos
-    }
+    // Atualiza todos os LEDs da matriz (todos acesos)
+    set_one_led(R, G, B, 0);
 }
 
 // Função para identificar o nome da cor a partir de valores RGB
