@@ -12,6 +12,7 @@
 #include "lib/font.h"
 #include "lib/matriz_leds.h"
 #include "gy33.h"
+#include <string.h>
 
 #define I2C_SDA_DISPLAY 14    //Pino SDA - Dados para display SSD1306
 #define I2C_SCL_DISPLAY 15    //Pino SCL - Clock para display SSD1306
@@ -41,6 +42,59 @@ uint buzzer_slice;                   //Slice para o buzzer
 ssd1306_t ssd;
 volatile uint8_t tela_atual = 0;        //0 = GY-33, 1 = BH1750, etc
 volatile uint32_t last_press_time = 0;  //Para debounce
+
+// Função para atualizar a matriz de LEDs conforme sensores
+void update_led_matrix_by_sensors(uint16_t r, uint16_t g, uint16_t b, uint16_t lux) {
+    // Normaliza os valores RGB para 0-255
+    uint16_t max_rgb = r;
+    if (g > max_rgb) max_rgb = g;
+    if (b > max_rgb) max_rgb = b;
+    uint8_t R = max_rgb ? (r * 255) / max_rgb : 0;
+    uint8_t G = max_rgb ? (g * 255) / max_rgb : 0;
+    uint8_t B = max_rgb ? (b * 255) / max_rgb : 0;
+
+    // Ajusta brilho conforme lux (0 = escuro, 255 = máximo)
+    uint8_t brightness = lux > 1000 ? 255 : (lux * 255) / 1000;
+    R = (R * brightness) / 255;
+    G = (G * brightness) / 255;
+    B = (B * brightness) / 255;
+
+    // Atualiza todos os LEDs da matriz
+    for (int i = 0; i < NUM_PIXELS; i++) {
+        set_one_led(R, G, B, 0); // 0: todos acesos
+    }
+}
+
+// Função para identificar o nome da cor a partir de valores RGB
+const char* get_color_name(uint16_t r, uint16_t g, uint16_t b) {
+    // Normaliza para 0-255
+    uint16_t max_rgb = r;
+    if (g > max_rgb) max_rgb = g;
+    if (b > max_rgb) max_rgb = b;
+    uint8_t R = max_rgb ? (r * 255) / max_rgb : 0;
+    uint8_t G = max_rgb ? (g * 255) / max_rgb : 0;
+    uint8_t B = max_rgb ? (b * 255) / max_rgb : 0;
+
+    // Limiares simples para cores básicas
+    if (R > 200 && G < 80 && B < 80) return "Red";
+    if (R < 80 && G > 200 && B < 80) return "Green";
+    if (R < 80 && G < 80 && B > 200) return "Blue";
+    if (R > 200 && G > 200 && B < 80) return "Yellow";
+    if (R < 80 && G > 200 && B > 200) return "Cyan";
+    if (R > 200 && G < 80 && B > 200) return "Magenta";
+    if (R > 200 && G > 200 && B > 200) return "White";
+    if (R < 50 && G < 50 && B < 50) return "Black";
+    if (R > 150 && G > 80 && B < 80) return "Orange";
+    if (R > 180 && G > 180 && B > 100 && B < 180) return "Gray";
+    return "Unknown";
+}
+
+// Função para classificar a luminosidade
+const char* get_lux_level(uint16_t lux) {
+    if (lux < 100) return "Low";
+    if (lux < 500) return "Medium";
+    return "High";
+}
 
 void buzzer_beep(uint slice, int duracao_ms){
     pwm_set_enabled(slice, true);   // Liga o buzzer
@@ -158,6 +212,8 @@ int main(){
         if(lux < LUX_MIN){
             buzzer_beep(buzzer_slice, 100);   // beep curto
         }
+        // Atualiza matriz de LEDs conforme sensores
+        update_led_matrix_by_sensors(r, g, b, lux);
         //Alerta com buzzer de vermelho intenso
         if(r > RED_ALERT && r > g * 2 && r > b * 2){
             buzzer_beep(buzzer_slice, 500);   //beep longo
@@ -169,8 +225,9 @@ int main(){
         ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);      // Desenha um retângulo
         ssd1306_line(&ssd, 3, 25, 123, 25, true);           // Desenha uma linha
         ssd1306_line(&ssd, 3, 37, 123, 37, true);           // Desenha uma linha
-        ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6); // Desenha uma string
-        ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 16);  // Desenha uma string
+        ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6);  // Desenha uma string  GY33", 8, 6);  // Desenha uma string
+        const char* color_name = get_color_name(r, g, b);
+        ssd1306_draw_string(&ssd, color_name, 20, 16);  // Mostra o nome da cor
         ssd1306_draw_string(&ssd, "Cores   RGB", 10, 28);  // Desenha uma string
         ssd1306_line(&ssd, 63, 25, 63, 60, true);           // Desenha uma linha vertical
         ssd1306_draw_string(&ssd, str_red, 14, 41);        // Desenha uma string
@@ -178,17 +235,18 @@ int main(){
         ssd1306_draw_string(&ssd, str_blue, 73, 41);       // Desenha uma string
         ssd1306_draw_string(&ssd, str_clear, 73, 52);      // Desenha uma string
         }
-        if(tela_atual == 1){    //Tela 1 - Sensor de luz GY302
+    if(tela_atual == 1){    //Tela 1 - Sensor de luz GY302
         //Atualiza o conteúdo do display com animações
         ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);       // Desenha um retângulo
         ssd1306_line(&ssd, 3, 25, 123, 25, true);            // Desenha uma linha
         ssd1306_line(&ssd, 3, 37, 123, 37, true);            // Desenha uma linha
         ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6);  // Desenha uma string
-        ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 16);   // Desenha uma string
+        const char* lux_level = get_lux_level(lux);
+        ssd1306_draw_string(&ssd, lux_level, 20, 16);   // Mostra o nível de luminosidade
         ssd1306_draw_string(&ssd, "Sensor  BH1750", 10, 28);// Desenha uma string
         ssd1306_line(&ssd, 63, 25, 63, 37, true);            // Desenha uma linha vertical
         ssd1306_draw_string(&ssd, str_lux, 14, 41);         // Desenha uma string
-        }
+    }
 
         ssd1306_send_data(&ssd);                           //Atualiza o display
         sleep_ms(500);
