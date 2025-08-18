@@ -11,9 +11,10 @@
 #include "lib/ssd1306.h"
 #include "lib/font.h"
 #include "lib/matriz_leds.h"
+#include "gy33.h"
 
-#define I2C_SDA 14    //Pino SDA - Dados
-#define I2C_SCL 15    //Pino SCL - Clock
+#define I2C_SDA_DISPLAY 14    //Pino SDA - Dados para display SSD1306
+#define I2C_SCL_DISPLAY 15    //Pino SCL - Clock para display SSD1306
 #define LED_RED 13
 #define LED_GREEN 12
 #define LED_BLUE 11
@@ -26,14 +27,14 @@
 
 //Definições do sensor GY-33
 #define GY33_I2C_ADDR 0x29 //Endereço do GY-33 no barramento I2C
-#define I2C_PORT i2c0
+#define I2C_PORT_COR i2c0
 #define SDA_PIN 0
 #define SCL_PIN 1
 
 //Para o sensor de luz BH1750. Endereço 0x23
-#define I2C_PORT i2c1               // i2c0 pinos 0 e 1, i2c1 pinos 2 e 3
-#define I2C_SDA 2                   // 0 ou 2
-#define I2C_SCL 3                   // 1 ou 3
+#define I2C_PORT_LUX i2c1               // i2c0 pinos 0 e 1, i2c1 pinos 2 e 3
+#define I2C_SDA_LUX 2                   // 0 ou 2
+#define I2C_SCL_LUX 3                   // 1 ou 3
 
 //Variáveis globais
 uint buzzer_slice;                   //Slice para o buzzer
@@ -45,6 +46,17 @@ void buzzer_beep(uint slice, int duracao_ms){
     pwm_set_enabled(slice, true);   // Liga o buzzer
     sleep_ms(duracao_ms);
     pwm_set_enabled(slice, false);  // Desliga
+}
+
+void botao_a_callback(uint gpio, uint32_t events){
+    uint32_t agora = to_ms_since_boot(get_absolute_time());
+    if(agora - last_press_time > 250){   // debounce de 250ms
+        last_press_time = agora;
+        tela_atual++;
+        if(tela_atual > 1){ //verifica e alterna a tela
+            tela_atual = 0;
+        }
+    }
 }
 
 void inicializar_componentes(){
@@ -78,10 +90,10 @@ void inicializar_componentes(){
 
     //Inicializa I2C para o display SSD1306
     i2c_init(i2c1, 400 * 1000);
-    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C); // Dados
-    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C); // Clock
-    gpio_pull_up(I2C_SDA);
-    gpio_pull_up(I2C_SCL);
+    gpio_set_function(I2C_SDA_DISPLAY, GPIO_FUNC_I2C); // Dados
+    gpio_set_function(I2C_SCL_DISPLAY, GPIO_FUNC_I2C); // Clock
+    gpio_pull_up(I2C_SDA_DISPLAY);
+    gpio_pull_up(I2C_SCL_DISPLAY);
     //Inicializa display
     ssd1306_init(&ssd, 128, 64, false, 0x3C, i2c1);
     ssd1306_config(&ssd);
@@ -100,27 +112,16 @@ void inicializar_componentes(){
     pwm_set_enabled(buzzer_slice, false);                          // Começa desligado
 
     //Inicializa o sensor de cor - GY33
-    i2c_init(I2C_PORT, 100 * 1000);
+    i2c_init(I2C_PORT_COR, 100 * 1000);
     gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(SDA_PIN);
     gpio_pull_up(SCL_PIN);
     printf("Iniciando GY-33...\n");
-    gy33_init();
+    gy33_init(I2C_PORT_COR);
 
     //Inicializa o sensor de luz BH1750
-    bh1750_power_on(I2C_PORT);
-}
-
-void botao_a_callback(uint gpio, uint32_t events){
-    uint32_t agora = to_ms_since_boot(get_absolute_time());
-    if(agora - last_press_time > 250){   // debounce de 250ms
-        last_press_time = agora;
-        tela_atual++;
-        if(tela_atual > 1){ //verifica e alterna a tela
-            tela_atual = 0;
-        }
-    }
+    bh1750_power_on(I2C_PORT_LUX);
 }
 
 int main(){
@@ -135,10 +136,14 @@ int main(){
     while(true){
         //Leitura do sensor de cor
         uint16_t r, g, b, c;
-        gy33_read_color(&r, &g, &b, &c);
+        gy33_color_t color;
+        gy33_read_color(I2C_PORT_COR, &color);
+        r = color.r;
+        g = color.g;
+        b = color.b;
 
         //Leitura do sensor de Luz BH1750
-        uint16_t lux = bh1750_read_measurement(I2C_PORT);
+        uint16_t lux = bh1750_read_measurement(I2C_PORT_LUX);
         printf("Lux = %d\n", lux);
 
         printf("Cor detectada - R: %d, G: %d, B: %d, Clear: %d\n", r, g, b, c);
