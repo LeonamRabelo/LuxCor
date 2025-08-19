@@ -253,31 +253,31 @@ int main(){
 
         ssd1306_fill(&ssd, false);                          // Limpa o display
         if(tela_atual == 0){    //Tela 0 - Sensor de cor GY33
-        //Atualiza o conteúdo do display com animações
-        ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);      // Desenha um retângulo
-        ssd1306_line(&ssd, 3, 25, 123, 25, true);           // Desenha uma linha
-        ssd1306_line(&ssd, 3, 37, 123, 37, true);           // Desenha uma linha
-        ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6);  // Desenha uma string  GY33", 8, 6);  // Desenha uma string
-        const char* color_name = get_color_name(r, g, b);
-        ssd1306_draw_string(&ssd, color_name, 20, 16);  // Mostra o nome da cor
-        ssd1306_draw_string(&ssd, "Cores   RGB", 10, 28);  // Desenha uma string
-        ssd1306_line(&ssd, 63, 25, 63, 60, true);           // Desenha uma linha vertical
-        ssd1306_draw_string(&ssd, str_red, 14, 41);        // Desenha uma string
-        ssd1306_draw_string(&ssd, str_green, 14, 52);      // Desenha uma string
-        ssd1306_draw_string(&ssd, str_blue, 73, 41);       // Desenha uma string
-        ssd1306_draw_string(&ssd, str_clear, 73, 52);      // Desenha uma string
+            //Atualiza o conteúdo do display com animações
+            ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);      // Desenha um retângulo
+            ssd1306_line(&ssd, 3, 25, 123, 25, true);           // Desenha uma linha
+            ssd1306_line(&ssd, 3, 37, 123, 37, true);           // Desenha uma linha
+            ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6);  // Desenha uma string  GY33", 8, 6);  // Desenha uma string
+            const char* color_name = get_color_name(r, g, b);
+            ssd1306_draw_string(&ssd, color_name, 20, 16);  // Mostra o nome da cor
+            ssd1306_draw_string(&ssd, "Cores   RGB", 10, 28);  // Desenha uma string
+            ssd1306_line(&ssd, 63, 25, 63, 60, true);           // Desenha uma linha vertical
+            ssd1306_draw_string(&ssd, str_red, 14, 41);        // Desenha uma string
+            ssd1306_draw_string(&ssd, str_green, 14, 52);      // Desenha uma string
+            ssd1306_draw_string(&ssd, str_blue, 73, 41);       // Desenha uma string
+            ssd1306_draw_string(&ssd, str_clear, 73, 52);      // Desenha uma string
         }
-    if(tela_atual == 1){    //Tela 1 - Sensor de luz GY302
-        //Atualiza o conteúdo do display com animações
-        ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);       // Desenha um retângulo
-        ssd1306_line(&ssd, 3, 25, 123, 25, true);            // Desenha uma linha
-        ssd1306_line(&ssd, 3, 37, 123, 37, true);            // Desenha uma linha
-        ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6);  // Desenha uma string
-        const char* lux_level = get_lux_level(lux);
-        ssd1306_draw_string(&ssd, lux_level, 20, 16);   // Mostra o nível de luminosidade
-        ssd1306_draw_string(&ssd, "Sensor  BH1750", 10, 28);// Desenha uma string
-        ssd1306_line(&ssd, 63, 25, 63, 37, true);            // Desenha uma linha vertical
-        ssd1306_draw_string(&ssd, str_lux, 14, 41);         // Desenha uma string
+        if(tela_atual == 1){    //Tela 1 - Sensor de luz GY302
+            //Atualiza o conteúdo do display com animações
+            ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);       // Desenha um retângulo
+            ssd1306_line(&ssd, 3, 25, 123, 25, true);            // Desenha uma linha
+            ssd1306_line(&ssd, 3, 37, 123, 37, true);            // Desenha uma linha
+            ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6);  // Desenha uma string
+            const char* lux_level = get_lux_level(lux);
+            ssd1306_draw_string(&ssd, lux_level, 20, 16);   // Mostra o nível de luminosidade
+            ssd1306_draw_string(&ssd, "Sensor  BH1750", 10, 28);// Desenha uma string
+            ssd1306_line(&ssd, 63, 25, 63, 37, true);            // Desenha uma linha vertical
+            ssd1306_draw_string(&ssd, str_lux, 14, 41);         // Desenha uma string
     }
 
         ssd1306_send_data(&ssd);                           //Atualiza o display
