@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "pico/bootrom.h"
 #include "hardware/i2c.h"
 #include "hardware/pio.h"
 #include "hardware/pwm.h"
@@ -11,35 +12,47 @@
 #include "lib/ssd1306.h"
 #include "lib/font.h"
 #include "lib/matriz_leds.h"
+#include "lib/led_rgb.h"
+#include "gy33.h"
+#include <string.h>
 
-#define I2C_SDA 14    //Pino SDA - Dados
-#define I2C_SCL 15    //Pino SCL - Clock
-#define LED_RED 13
-#define LED_GREEN 12
-#define LED_BLUE 11
+#define I2C_SDA_DISPLAY 14    //Pino SDA - Dados para display SSD1306
+#define I2C_SCL_DISPLAY 15    //Pino SCL - Clock para display SSD1306
 #define WS2812_PIN 7  //Pino do WS2812
 #define BUZZER_PIN 21 //Pino do buzzer
 #define BOTAO_A 5       //Pino do botão A
+#define BOTAO_B 6       //Pino do botão B
+#define BOTAO_JOYSTICK 22 //Pino do botão joystick
 #define IS_RGBW false //Maquina PIO para RGBW
 #define LUX_MIN 100      // Limite de luminosidade em lux
 #define RED_ALERT 200    // Limite para vermelho intenso
 
 //Definições do sensor GY-33
 #define GY33_I2C_ADDR 0x29 //Endereço do GY-33 no barramento I2C
-#define I2C_PORT i2c0
+#define I2C_PORT_COR i2c0
 #define SDA_PIN 0
 #define SCL_PIN 1
 
 //Para o sensor de luz BH1750. Endereço 0x23
-#define I2C_PORT i2c1               // i2c0 pinos 0 e 1, i2c1 pinos 2 e 3
-#define I2C_SDA 2                   // 0 ou 2
-#define I2C_SCL 3                   // 1 ou 3
+#define I2C_PORT_LUX i2c0               // i2c0 pinos 0 e 1, i2c1 pinos 2 e 3
+#define I2C_SDA_LUX 2                   // 0 ou 2
+#define I2C_SCL_LUX 3                   // 1 ou 3
+
+enum colors {RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA, WHITE, BLACK};
 
 //Variáveis globais
 uint buzzer_slice;                   //Slice para o buzzer
 ssd1306_t ssd;
 volatile uint8_t tela_atual = 0;        //0 = GY-33, 1 = BH1750, etc
 volatile uint32_t last_press_time = 0;  //Para debounce
+volatile int cor_atual = RED;  //Cor atual da matriz de LED
+
+// Função para classificar a luminosidade
+const char* get_lux_level(uint16_t lux) {
+    if (lux < 100) return "Low";
+    if (lux < 500) return "Medium";
+    return "High";
+}
 
 void buzzer_beep(uint slice, int duracao_ms){
     pwm_set_enabled(slice, true);   // Liga o buzzer
@@ -47,28 +60,105 @@ void buzzer_beep(uint slice, int duracao_ms){
     pwm_set_enabled(slice, false);  // Desliga
 }
 
+void botao_a_callback(uint gpio, uint32_t events){
+    uint32_t agora = to_ms_since_boot(get_absolute_time());
+    if(agora - last_press_time > 250){   // debounce de 250ms
+        last_press_time = agora;
+        tela_atual++;
+        if(tela_atual > 1){ //verifica e alterna a tela
+            tela_atual = 0;
+        }
+    }
+}
+
+void botao_b_callback(uint gpio, uint32_t events){
+    uint32_t agora = to_ms_since_boot(get_absolute_time());
+    if(agora - last_press_time > 250){   // debounce de 250ms
+        last_press_time = agora;
+        cor_atual++;
+        switch (cor_atual)
+        {
+        case RED:
+            red();
+            break;
+        case GREEN:
+            green();
+            break;
+        case BLUE:
+            blue();
+            break;
+        case YELLOW:
+            yellow();
+            break;
+        case CYAN:
+            cyan();
+            break;
+        case MAGENTA:
+            magenta();
+            break;
+        case WHITE:
+            white();
+            break;
+        case BLACK:
+            black();
+            break;
+        default:
+            cor_atual = RED;
+            red();
+            break;
+        }
+    }
+}
+
+void botao_joystick_callback(uint gpio, uint32_t events){
+    uint32_t agora = to_ms_since_boot(get_absolute_time());
+    if(agora - last_press_time > 250){   // debounce de 250ms
+        last_press_time = agora;
+        //Desliga os leds da matriz
+        set_one_led(0, 0, 0, 0);
+        black();
+        reset_usb_boot(0, 0);
+    }
+}
+
+void gpio_irq_callback(uint gpio, uint32_t events){
+    if(gpio == BOTAO_A){
+        botao_a_callback(gpio, events);
+    } else if(gpio == BOTAO_B){
+        botao_b_callback(gpio, events);
+    } else if(gpio == BOTAO_JOYSTICK){
+        botao_joystick_callback(gpio, events);
+    }
+}
+
 void inicializar_componentes(){
     stdio_init_all();
 
-    //Inicializa LED Vermelho
-    gpio_init(LED_RED);
-    gpio_set_dir(LED_RED, GPIO_OUT);
-    gpio_put(LED_RED, 0);
-    //Inicializa LED Verde
-    gpio_init(LED_GREEN);
-    gpio_set_dir(LED_GREEN, GPIO_OUT);
-    gpio_put(LED_GREEN, 0);
-    //Inicializa LED Azul
-    gpio_init(LED_BLUE);
-    gpio_set_dir(LED_BLUE, GPIO_OUT);
-    gpio_put(LED_BLUE, 0);
+    //Inicializa os LEDs RGB
+    led_init_all();
+    red();
 
     //Inicializa o botão A com pull-up
     gpio_init(BOTAO_A);
     gpio_set_dir(BOTAO_A, GPIO_IN);
     gpio_pull_up(BOTAO_A);
+
+    //Inicializa o botão B com pull-up
+    gpio_init(BOTAO_B);
+    gpio_set_dir(BOTAO_B, GPIO_IN);
+    gpio_pull_up(BOTAO_B);
+
+    //Inicializa o botão joystick com pull-up
+    gpio_init(BOTAO_JOYSTICK);
+    gpio_set_dir(BOTAO_JOYSTICK, GPIO_IN);
+    gpio_pull_up(BOTAO_JOYSTICK);
+
     //Interrupção no botão A
-    gpio_set_irq_enabled_with_callback(BOTAO_A, GPIO_IRQ_EDGE_FALL, true, &botao_a_callback);
+    gpio_set_irq_enabled_with_callback(BOTAO_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_callback);
+    //Interrupção no botão B
+    gpio_set_irq_enabled_with_callback(BOTAO_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_callback);
+    //Interrupção no botão joystick
+    gpio_set_irq_enabled_with_callback(BOTAO_JOYSTICK, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_callback);
 
     //Inicializa o pio
     PIO pio = pio0;
@@ -78,10 +168,10 @@ void inicializar_componentes(){
 
     //Inicializa I2C para o display SSD1306
     i2c_init(i2c1, 400 * 1000);
-    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C); // Dados
-    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C); // Clock
-    gpio_pull_up(I2C_SDA);
-    gpio_pull_up(I2C_SCL);
+    gpio_set_function(I2C_SDA_DISPLAY, GPIO_FUNC_I2C); // Dados
+    gpio_set_function(I2C_SCL_DISPLAY, GPIO_FUNC_I2C); // Clock
+    gpio_pull_up(I2C_SDA_DISPLAY);
+    gpio_pull_up(I2C_SCL_DISPLAY);
     //Inicializa display
     ssd1306_init(&ssd, 128, 64, false, 0x3C, i2c1);
     ssd1306_config(&ssd);
@@ -100,27 +190,16 @@ void inicializar_componentes(){
     pwm_set_enabled(buzzer_slice, false);                          // Começa desligado
 
     //Inicializa o sensor de cor - GY33
-    i2c_init(I2C_PORT, 100 * 1000);
+    i2c_init(I2C_PORT_COR, 100 * 1000);
     gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(SDA_PIN);
     gpio_pull_up(SCL_PIN);
     printf("Iniciando GY-33...\n");
-    gy33_init();
+    gy33_init(I2C_PORT_COR);
 
     //Inicializa o sensor de luz BH1750
-    bh1750_power_on(I2C_PORT);
-}
-
-void botao_a_callback(uint gpio, uint32_t events){
-    uint32_t agora = to_ms_since_boot(get_absolute_time());
-    if(agora - last_press_time > 250){   // debounce de 250ms
-        last_press_time = agora;
-        tela_atual++;
-        if(tela_atual > 1){ //verifica e alterna a tela
-            tela_atual = 0;
-        }
-    }
+    bh1750_power_on(I2C_PORT_LUX);
 }
 
 int main(){
@@ -135,10 +214,18 @@ int main(){
     while(true){
         //Leitura do sensor de cor
         uint16_t r, g, b, c;
-        gy33_read_color(&r, &g, &b, &c);
+        gy33_color_t color;
+        gy33_read_color(I2C_PORT_COR, &color);
+        r = color.r;
+        g = color.g;
+        b = color.b;
+
+        r = r > 255 ? 255 : r;
+        g = g > 255 ? 255 : g;
+        b = b > 255 ? 255 : b;
 
         //Leitura do sensor de Luz BH1750
-        uint16_t lux = bh1750_read_measurement(I2C_PORT);
+        uint16_t lux = bh1750_read_measurement(I2C_PORT_LUX);
         printf("Lux = %d\n", lux);
 
         printf("Cor detectada - R: %d, G: %d, B: %d, Clear: %d\n", r, g, b, c);
@@ -153,6 +240,8 @@ int main(){
         if(lux < LUX_MIN){
             buzzer_beep(buzzer_slice, 100);   // beep curto
         }
+        // Atualiza matriz de LEDs conforme sensores
+        update_led_matrix_by_sensors(r, g, b, lux);
         //Alerta com buzzer de vermelho intenso
         if(r > RED_ALERT && r > g * 2 && r > b * 2){
             buzzer_beep(buzzer_slice, 500);   //beep longo
@@ -164,8 +253,9 @@ int main(){
         ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);      // Desenha um retângulo
         ssd1306_line(&ssd, 3, 25, 123, 25, true);           // Desenha uma linha
         ssd1306_line(&ssd, 3, 37, 123, 37, true);           // Desenha uma linha
-        ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6); // Desenha uma string
-        ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 16);  // Desenha uma string
+        ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6);  // Desenha uma string  GY33", 8, 6);  // Desenha uma string
+        const char* color_name = get_color_name(r, g, b);
+        ssd1306_draw_string(&ssd, color_name, 20, 16);  // Mostra o nome da cor
         ssd1306_draw_string(&ssd, "Cores   RGB", 10, 28);  // Desenha uma string
         ssd1306_line(&ssd, 63, 25, 63, 60, true);           // Desenha uma linha vertical
         ssd1306_draw_string(&ssd, str_red, 14, 41);        // Desenha uma string
@@ -173,17 +263,18 @@ int main(){
         ssd1306_draw_string(&ssd, str_blue, 73, 41);       // Desenha uma string
         ssd1306_draw_string(&ssd, str_clear, 73, 52);      // Desenha uma string
         }
-        if(tela_atual == 1){    //Tela 1 - Sensor de luz GY302
+    if(tela_atual == 1){    //Tela 1 - Sensor de luz GY302
         //Atualiza o conteúdo do display com animações
         ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);       // Desenha um retângulo
         ssd1306_line(&ssd, 3, 25, 123, 25, true);            // Desenha uma linha
         ssd1306_line(&ssd, 3, 37, 123, 37, true);            // Desenha uma linha
         ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6);  // Desenha uma string
-        ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 16);   // Desenha uma string
+        const char* lux_level = get_lux_level(lux);
+        ssd1306_draw_string(&ssd, lux_level, 20, 16);   // Mostra o nível de luminosidade
         ssd1306_draw_string(&ssd, "Sensor  BH1750", 10, 28);// Desenha uma string
         ssd1306_line(&ssd, 63, 25, 63, 37, true);            // Desenha uma linha vertical
         ssd1306_draw_string(&ssd, str_lux, 14, 41);         // Desenha uma string
-        }
+    }
 
         ssd1306_send_data(&ssd);                           //Atualiza o display
         sleep_ms(500);

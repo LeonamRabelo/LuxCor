@@ -1,4 +1,5 @@
 
+#include <math.h>
 #include "hardware/pio.h"
 #include "ws2812.pio.h"
 #include "matriz_leds.h"
@@ -50,4 +51,63 @@ void set_one_led(uint8_t r, uint8_t g, uint8_t b, int numero){
             put_pixel(0);  // Desliga
         }
     }
+}
+
+// Função para atualizar a matriz de LEDs conforme sensores
+void update_led_matrix_by_sensors(uint16_t r, uint16_t g, uint16_t b, uint16_t lux) {
+    uint8_t red = 0;
+    uint8_t green = 0;
+    uint8_t blue = 0;
+
+    // Reconhecimento de cor aprimorado
+    if (r > 180 && g < 180 && b < 180) {
+        red = 255;
+    } else if (r < 180 && g > 180 && b < 180) {
+        green = 255;
+    } else if (r < 180 && g < 180 && b > 180) {
+        blue = 255;
+    } else if (r > 180 && g > 180 && b < 180) {
+        red = 255;
+        green = 255;
+    } else if (r < 180 && g > 180 && b > 180) {
+        green = 255;
+        blue = 255;
+    } else if (r > 180 && g < 180 && b > 180) {
+        red = 255;
+        blue = 255;
+    } else if (r > 180 && g > 180 && b > 180) {
+        red = 255;
+        green = 255;
+        blue = 255;
+    } 
+
+    // Regra de 3 para ajustar brilho
+    if(lux > 1000) lux = 1000;  // Limita a 1000lux
+    red = (red * lux) / 1000;
+    green = (green * lux) / 1000;
+    blue = (blue * lux) / 1000;
+
+    set_one_led(red, green, blue, 0);
+}
+
+// Função para identificar o nome da cor a partir de valores RGB
+const char* get_color_name(uint16_t r, uint16_t g, uint16_t b) {
+    // Normaliza para 0-255
+    uint16_t max_rgb = r;
+    if (g > max_rgb) max_rgb = g;
+    if (b > max_rgb) max_rgb = b;
+    uint8_t R = max_rgb ? (r * 255) / max_rgb : 0;
+    uint8_t G = max_rgb ? (g * 255) / max_rgb : 0;
+    uint8_t B = max_rgb ? (b * 255) / max_rgb : 0;
+
+    // Reconhecimento de cor aprimorado
+    if (R > 180 && G < 180 && B < 180) return "Red";
+    if (R < 180 && G > 180 && B < 180) return "Green";
+    if (R < 180 && G < 180 && B > 180) return "Blue";
+    if (R > 180 && G > 180 && B < 180) return "Yellow";
+    if (R < 180 && G > 180 && B > 180) return "Cyan";
+    if (R > 180 && G < 180 && B > 180) return "Magenta";
+    if (R > 180 && G > 180 && B > 180) return "White";
+    if (R < 60 && G < 60 && B < 60) return "Black";
+    return "Unknown";
 }
