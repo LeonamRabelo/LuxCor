@@ -71,13 +71,14 @@ void botao_a_callback(uint gpio, uint32_t events){
     }
 }
 
+//Funcao callback para o botao B, altera a cor da matriz de LEDs
 void botao_b_callback(uint gpio, uint32_t events){
     uint32_t agora = to_ms_since_boot(get_absolute_time());
     if(agora - last_press_time > 250){   // debounce de 250ms
         last_press_time = agora;
         cor_atual++;
-        switch (cor_atual)
-        {
+        switch (cor_atual)  //Verifica qual cor esta sendo usada
+        {   //Altera a cor, chama a funcao correspondente para a cor (feitas em lib/led_rgb.c)
         case RED:
             red();
             break;
@@ -110,6 +111,7 @@ void botao_b_callback(uint gpio, uint32_t events){
     }
 }
 
+//Funcao callback para o botao joystick, reseta a placa
 void botao_joystick_callback(uint gpio, uint32_t events){
     uint32_t agora = to_ms_since_boot(get_absolute_time());
     if(agora - last_press_time > 250){   // debounce de 250ms
@@ -121,6 +123,7 @@ void botao_joystick_callback(uint gpio, uint32_t events){
     }
 }
 
+//Funcao de chamada dos callbacks para os botoes
 void gpio_irq_callback(uint gpio, uint32_t events){
     if(gpio == BOTAO_A){
         botao_a_callback(gpio, events);
@@ -131,6 +134,7 @@ void gpio_irq_callback(uint gpio, uint32_t events){
     }
 }
 
+//Funcao para inicializar os componentes
 void inicializar_componentes(){
     stdio_init_all();
 
